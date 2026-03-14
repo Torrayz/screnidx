@@ -262,7 +262,10 @@ async function loadStockData(symbol, silent = false) {
   }
 
   // ─── Try Python analysis first (more accurate with pandas+ta) ───
-  const pyAnalysis = await fetchAnalysis(symbol, state.chartRange);
+  // Always use minimum 6mo for analysis to ensure enough data for all indicators
+  // (SMA200, Ichimoku, etc.) regardless of the chart display range
+  const analysisperiod = ['1mo', '3mo'].includes(state.chartRange) ? '6mo' : state.chartRange;
+  const pyAnalysis = await fetchAnalysis(symbol, analysisperiod);
 
   if (pyAnalysis) {
     // Use Python-computed analysis
@@ -510,12 +513,18 @@ function updateChart(data) {
 
   // SMA overlays
   if (state.indicators) {
-    const sma20Data = state.indicators.sma.sma20
-      .map((v, i) => v !== null ? { time: data[i].date, value: v } : null)
+    // Indicator arrays may be longer than chart data (analysis uses 6mo minimum)
+    // Use the tail of indicator arrays that correspond to chart data length
+    const indLen = state.indicators.sma.sma20.length;
+    const offset = Math.max(0, indLen - data.length);
+
+    const mapIndicator = (arr) => arr
+      .slice(offset)
+      .map((v, i) => v !== null && i < data.length ? { time: data[i].date, value: v } : null)
       .filter(Boolean);
-    const sma50Data = state.indicators.sma.sma50
-      .map((v, i) => v !== null ? { time: data[i].date, value: v } : null)
-      .filter(Boolean);
+
+    const sma20Data = mapIndicator(state.indicators.sma.sma20);
+    const sma50Data = mapIndicator(state.indicators.sma.sma50);
 
     if (sma20Data.length) {
       const sma20Series = chart.addSeries(LineSeries, {
@@ -538,12 +547,8 @@ function updateChart(data) {
     }
 
     // Bollinger Bands
-    const bbUpper = state.indicators.bb.upper
-      .map((v, i) => v !== null ? { time: data[i].date, value: v } : null)
-      .filter(Boolean);
-    const bbLower = state.indicators.bb.lower
-      .map((v, i) => v !== null ? { time: data[i].date, value: v } : null)
-      .filter(Boolean);
+    const bbUpper = mapIndicator(state.indicators.bb.upper);
+    const bbLower = mapIndicator(state.indicators.bb.lower);
 
     if (bbUpper.length) {
       const bbUpperSeries = chart.addSeries(LineSeries, {
@@ -621,6 +626,9 @@ function renderTechnicalTab(container) {
   const ind = state.indicators;
   const summary = state.techSummary;
 
+  // Use the last index of indicator arrays (may differ from chart data length)
+  const indLast = ind.rsi.length - 1;
+
   container.innerHTML = `
     <div class="grid-2 animate-in">
       <!-- Technical Summary -->
@@ -660,41 +668,42 @@ function renderTechnicalTab(container) {
         
         <div class="indicator-row">
           <span class="indicator-name">RSI (14)</span>
-          <span class="indicator-value ${getColorClass(ind.rsi[last], 30, 70)}">${ind.rsi[last]?.toFixed(1) ?? 'N/A'}</span>
+          <span class="indicator-value ${getColorClass(ind.rsi[indLast], 30, 70)}">${ind.rsi[indLast]?.toFixed(1) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">MACD</span>
-          <span class="indicator-value ${ind.macd.macd[last] > 0 ? 'positive' : 'negative'}">${ind.macd.macd[last]?.toFixed(2) ?? 'N/A'}</span>
+          <span class="indicator-value ${ind.macd.macd[indLast] > 0 ? 'positive' : 'negative'}">${ind.macd.macd[indLast]?.toFixed(2) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">MACD Signal</span>
-          <span class="indicator-value">${ind.macd.signal[last]?.toFixed(2) ?? 'N/A'}</span>
+          <span class="indicator-value">${ind.macd.signal[indLast]?.toFixed(2) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">MACD Histogram</span>
-          <span class="indicator-value ${(ind.macd.histogram[last] ?? 0) > 0 ? 'positive' : 'negative'}">${ind.macd.histogram[last]?.toFixed(2) ?? 'N/A'}</span>
+          <span class="indicator-value ${(ind.macd.histogram[indLast] ?? 0) > 0 ? 'positive' : 'negative'}">${ind.macd.histogram[indLast]?.toFixed(2) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">Stochastic %K</span>
-          <span class="indicator-value">${ind.stoch.k[last]?.toFixed(1) ?? 'N/A'}</span>
+          <span class="indicator-value">${ind.stoch.k[indLast]?.toFixed(1) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">Stochastic %D</span>
-          <span class="indicator-value">${ind.stoch.d[last]?.toFixed(1) ?? 'N/A'}</span>
+          <span class="indicator-value">${ind.stoch.d[indLast]?.toFixed(1) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">ADX</span>
-          <span class="indicator-value">${ind.adx.adx[last]?.toFixed(1) ?? 'N/A'}</span>
+          <span class="indicator-value">${ind.adx.adx[indLast]?.toFixed(1) ?? 'N/A'}</span>
         </div>
         <div class="indicator-row">
           <span class="indicator-name">MFI (14)</span>
-          <span class="indicator-value ${getColorClass(ind.mfi[last], 20, 80)}">${ind.mfi[last]?.toFixed(1) ?? 'N/A'}</span>
+          <span class="indicator-value ${getColorClass(ind.mfi[indLast], 20, 80)}">${ind.mfi[indLast]?.toFixed(1) ?? 'N/A'}</span>
         </div>
 
         <div style="margin-top:var(--space-lg)">
           <div class="card-title">📐 Moving Averages</div>
           ${['sma5', 'sma10', 'sma20', 'sma50', 'sma200'].map(key => {
-    const val = ind.sma[key]?.[last];
+    const arr = ind.sma[key] || [];
+    const val = arr[arr.length - 1];
     const price = data[last].close;
     return `
               <div class="indicator-row">
