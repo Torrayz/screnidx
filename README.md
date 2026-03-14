@@ -154,7 +154,17 @@ Mendukung **100+ saham IDX** dari berbagai sektor:
 
 ## 📸 Screenshots
 
-> _Coming soon_
+### Dashboard & Analisis Teknikal
+![Dashboard](screenshots/dashboard.png)
+
+### Entry Point & Support/Resistance
+![Entry Point](screenshots/entry-point.png)
+
+### Bandarmology — Smart Money Tracking
+![Bandarmology](screenshots/bandarmology.png)
+
+### EOD Prediksi Harga
+![EOD Prediksi](screenshots/eod-prediksi.png)
 
 ## 🤝 Contributing
 
